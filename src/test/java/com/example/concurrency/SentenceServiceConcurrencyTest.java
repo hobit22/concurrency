@@ -1,5 +1,8 @@
 package com.example.concurrency;
 
+import com.example.concurrency.service.SentenceService;
+import com.example.concurrency.service.SentenceServiceV1;
+import com.example.concurrency.service.SentenceServiceV2;
 import org.junit.jupiter.api.Test;
 
 import java.util.*;
@@ -19,7 +22,10 @@ public class SentenceServiceConcurrencyTest {
             executor.submit(() -> {
                 try {
                     int id = service.create("문장");
+                    Thread.sleep(100);
                     ids.add(id);
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
                 } finally {
                     latch.countDown();
                 }
@@ -42,7 +48,10 @@ public class SentenceServiceConcurrencyTest {
             final int idx = i;
             executor.submit(() -> {
                 try {
+                    Thread.sleep(100);
                     service.update(id, "수정된 문장 " + idx);
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
                 } finally {
                     latch.countDown();
                 }
@@ -64,7 +73,10 @@ public class SentenceServiceConcurrencyTest {
         for (int i = 0; i < THREAD_COUNT; i++) {
             executor.submit(() -> {
                 try {
+                    Thread.sleep(100);
                     service.delete(id); // 여러 스레드가 동시에 삭제 시도
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
                 } finally {
                     latch.countDown();
                 }
@@ -78,20 +90,24 @@ public class SentenceServiceConcurrencyTest {
     }
 
     @Test
-    void testAllImplementations() throws InterruptedException {
-        List<SentenceService> implementations = List.of(
-                new SentenceServiceV1(), // HashMap + int (비스레드 안전)
-                new SentenceServiceV2(), // synchronized + HashMap
-                new SentenceServiceV3(), // AtomicInteger + ConcurrentHashMap
-                new SentenceServiceV4(), // ReentrantLock
-                new SentenceServiceV5(), // ReadWriteLock
-                new SentenceServiceV6()  // Collections.synchronizedMap
-        );
+    void testV1() throws InterruptedException {
+        SentenceService service = new SentenceServiceV1();
 
-        for (SentenceService service : implementations) {
-            runConcurrentCreateTest(service);
-            runConcurrentUpdateTest(service);
-            runConcurrentDeleteTest(service);
-        }
+        assertAll("V1 Test",
+                () -> runConcurrentCreateTest(service),
+                () -> runConcurrentUpdateTest(service),
+                () -> runConcurrentDeleteTest(service)
+        );
+    }
+
+    @Test
+    void testV2() throws InterruptedException {
+        SentenceService service = new SentenceServiceV2();
+
+        assertAll("V2 Test",
+                () -> runConcurrentCreateTest(service),
+                () -> runConcurrentUpdateTest(service),
+                () -> runConcurrentDeleteTest(service)
+        );
     }
 }
