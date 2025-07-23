@@ -1,17 +1,16 @@
 package com.example.concurrency;
 
-import com.example.concurrency.service.SentenceService;
-import com.example.concurrency.service.SentenceServiceV1;
-import com.example.concurrency.service.SentenceServiceV2;
-import com.example.concurrency.service.SentenceServiceV3;
+import com.example.concurrency.service.*;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
-import java.util.*;
+import java.util.Queue;
+import java.util.Set;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 public class SentenceServiceConcurrencyTest {
 
@@ -118,17 +117,50 @@ public class SentenceServiceConcurrencyTest {
         assertNull(finalValue, "최종적으로 문장은 삭제되어 있어야 합니다");
     }
 
+    void runPerformanceTest(SentenceService service, String label) throws InterruptedException {
+        final int id = service.create("초기 문장");
+
+        int threadCount = 100;
+        int opsPerThread = 1000;
+
+        ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+        CountDownLatch latch = new CountDownLatch(threadCount);
+
+        long start = System.currentTimeMillis();
+
+        for (int i = 0; i < threadCount; i++) {
+            final int idx = i;
+            executor.submit(() -> {
+                for (int j = 0; j < opsPerThread; j++) {
+                    service.update(id, "수정 by thread-" + idx);
+                }
+                latch.countDown();
+            });
+        }
+
+        latch.await();
+        executor.shutdown();
+
+        long end = System.currentTimeMillis();
+
+        long totalOps = threadCount * opsPerThread;
+        long durationMs = end - start;
+        double opsPerSec = (totalOps * 1000.0) / durationMs;
+
+        System.out.printf("⏱️ [%s - update 경쟁] 시간: %dms, 처리량: %.2f ops/sec%n", label, durationMs, opsPerSec);
+    }
+
     @Nested
     class V1Tests {
         SentenceService service = new SentenceServiceV1();
 
         @Test
-        void create_ShouldFail() throws InterruptedException {
+        void createTest() throws InterruptedException {
             runConcurrentCreateTest(service);
         }
 
         @Test
-        void update_delete_MayFail() throws InterruptedException {
+        void updateDeleteTest() throws InterruptedException {
             runConcurrentUpdateAndDeleteTest(service);
         }
     }
@@ -138,12 +170,12 @@ public class SentenceServiceConcurrencyTest {
         SentenceService service = new SentenceServiceV2();
 
         @Test
-        void create_ShouldFail() throws InterruptedException {
+        void createTest() throws InterruptedException {
             runConcurrentCreateTest(service);
         }
 
         @Test
-        void update_delete_MayFail() throws InterruptedException {
+        void updateDeleteTest() throws InterruptedException {
             runConcurrentUpdateAndDeleteTest(service);
         }
     }
@@ -153,13 +185,48 @@ public class SentenceServiceConcurrencyTest {
         SentenceService service = new SentenceServiceV3();
 
         @Test
-        void create_ShouldFail() throws InterruptedException {
+        void createTest() throws InterruptedException {
             runConcurrentCreateTest(service);
         }
 
         @Test
-        void update_delete_MayFail() throws InterruptedException {
+        void updateDeleteTest() throws InterruptedException {
             runConcurrentUpdateAndDeleteTest(service);
         }
+    }
+
+    @Nested
+    class V4Tests {
+        SentenceService service = new SentenceServiceV4();
+
+        @Test
+        void createTest() throws InterruptedException {
+            runConcurrentCreateTest(service);
+        }
+
+        @Test
+        void updateDeleteTest() throws InterruptedException {
+            runConcurrentUpdateAndDeleteTest(service);
+        }
+    }
+
+    @Test
+    void performanceTestV1() throws InterruptedException {
+        runPerformanceTest(new SentenceServiceV1(), "V1");
+    }
+
+    @Test
+    void performanceTestV2() throws InterruptedException {
+        runPerformanceTest(new SentenceServiceV2(), "V2");
+    }
+
+    @Test
+    void performanceTestV3() throws InterruptedException {
+        runPerformanceTest(new SentenceServiceV3(), "V3");
+    }
+
+    @Test
+    void performanceTestV4() throws InterruptedException {
+        runPerformanceTest(new SentenceServiceV4(), "V4");
     }
 }
